@@ -4,17 +4,20 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <time.h>
 
 int main() {
     char mode_apply[128];
     char gamestart[128];
     char screenoff[128];
     char command[256];
+    FILE *pid_list;
 
     snprintf(command, sizeof(command), "su -lp 2000 -c \"cmd notification post -S bigtext -t 'ENCORE' \\\"Tag%d Tweaks applied successfully\\\"\"", (int)time(NULL));
     system(command);
 
-    mkdir("/dev/encore/AI", 0777);
+    system("mkdir -p /dev/encore/AI");
+
     FILE *mode_file = fopen("/dev/encore/AI/mode", "w");
     if (mode_file) {
         fprintf(mode_file, "unset");
