@@ -94,11 +94,9 @@ int main() {
             pclose(screen_dump);
         }
 
-        // Default mode
         if (strcmp(mode_apply, "normal") != 0) {
             system("sh /system/bin/encore-normal");
 
-            // Update mode
             mode_file = fopen("/dev/encore/AI/mode", "w");
             if (mode_file) {
                 fprintf(mode_file, "normal");
