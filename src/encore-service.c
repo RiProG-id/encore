@@ -12,49 +12,42 @@ char command[MAX_COMMAND_LENGTH];
 char *gamestart = NULL;
 
 char *trim_newline(char *str) {
-    if (str == NULL) return NULL;  // *** Perbaikan 1: Tambahkan pengecekan null ***
-    char *end;
-    if ((end = strchr(str, '\n')) != NULL) {
-        *end = '\0';
-    }
-    return str;
+  char *end;
+  if ((end = strchr(str, '\n')) != NULL) {
+    *end = '\0';
+  }
+  return str;
 }
 
 char *execute_command(const char *command) {
-    FILE *fp;
-    char buffer[MAX_OUTPUT_LENGTH];
-    char *result = NULL;
-    size_t result_length = 0;
+  FILE *fp;
+  char buffer[MAX_OUTPUT_LENGTH];
+  char *result = NULL;
+  size_t result_length = 0;
 
-    fp = popen(command, "r");
-    if (fp == NULL) {
-        printf("error: can't exec command %s\n", command);
-        return NULL;
+  fp = popen(command, "r");
+  if (fp == NULL) {
+    printf("error: can't exec command %s\n", command);
+    return NULL;
+  }
+
+  while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+    size_t buffer_length = strlen(buffer);
+    result = realloc(result, result_length + buffer_length + 1);
+    if (result == NULL) {
+      printf("error: memory allocation error.\n");
+      pclose(fp);
+      return NULL;
     }
+    strcpy(result + result_length, buffer);
+    result_length += buffer_length;
+  }
 
-    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
-        size_t buffer_length = strlen(buffer);
-        char *new_result = realloc(result, result_length + buffer_length + 1);
-        if (new_result == NULL) {
-            printf("error: memory allocation error.\n");
-            free(result);  // *** Perbaikan 2: Bebaskan memori yang telah dialokasikan sebelumnya untuk menghindari kebocoran memori ***
-            pclose(fp);
-            return NULL;
-        }
-        result = new_result;
-        strcpy(result + result_length, buffer);
-        result_length += buffer_length;
-    }
+  if (pclose(fp) == -1) {
+    printf("error: closing command stream.\n");
+  }
 
-    if (result != NULL) {
-        result[result_length] = '\0';  // *** Perbaikan 3: Pastikan string diakhiri dengan null ***
-    }
-
-    if (pclose(fp) == -1) {
-        printf("error: closing command stream.\n");
-    }
-
-    return result;
+  return result;
 }
 
 /* void write2file(const char *file_path, const char *content) {
@@ -74,125 +67,117 @@ char *execute_command(const char *command) {
 } */
 
 void setPriorities(const char *pid) {
-    if (pid == NULL) {  // *** Perbaikan 4: Tambahkan pengecekan null untuk pid ***
-        printf("error: PID is null\n");
-        return;
-    }
-    snprintf(command, sizeof(command), "renice -n -20 -p %s", pid);
-    system(command);
+  snprintf(command, sizeof(command), "renice -n -20 -p %s", pid);
+  system(command);
 
-    snprintf(command, sizeof(command), "ionice -c 1 -n 0 -p %s", pid);
-    system(command);
+  snprintf(command, sizeof(command), "ionice -c 1 -n 0 -p %s", pid);
+  system(command);
 
-    snprintf(command, sizeof(command), "chrt -f -p 98 %s", pid);
-    system(command);
+  snprintf(command, sizeof(command), "chrt -f -p 98 %s", pid);
+  system(command);
 }
 
-void performance_mode(void) {
-    system("sh /system/bin/encore-performance");
-}
+void performance_mode(void) { system("sh /system/bin/encore-performance"); }
 
-void normal_mode(void) {
-    system("sh /system/bin/encore-normal");
-}
+void normal_mode(void) { system("sh /system/bin/encore-normal"); }
 
 void powersave_mode(void) {
-    normal_mode();
-    system("sh /system/bin/encore-powersave");
+  normal_mode();
+  system("sh /system/bin/encore-powersave");
 }
 
 void perf_common(void) {
-    system(
-        "su -lp 2000 -c \"/system/bin/cmd notification post -S bigtext -t "
-        "\\\"ENCORE\\\" \\\"Tag$(date +%s)\\\" \\\"Tweaks applied "
-        "successfully\\\"\"");
-    system("sh /system/bin/encore-perfcommon");
+  system(
+      "su -lp 2000 -c \"/system/bin/cmd notification post -S bigtext -t "
+      "\\\"ENCORE\\\" \\\"Tag$(date +%s)\\\" \\\"Tweaks applied "
+      "successfully\\\"\"");
+  system("sh /system/bin/encore-perfcommon");
 }
 
 void apply_mode(const int mode) {
-    char *pid = NULL;
+  char *pid = NULL;
 
-    if (mode == 1 && cur_mode != 1) {
-        cur_mode = 1;
-        printf("Applying performance mode\n");
-        snprintf(command, sizeof(command), "pidof %s", gamestart);
-        pid = execute_command(command);
-        if (pid != NULL) {  // *** Perbaikan 5: Tambahkan pengecekan null untuk pid ***
-            setPriorities(trim_newline(pid));
-            snprintf(command, sizeof(command),
-                "/system/bin/am start -a android.intent.action.MAIN -e toasttext "
-                "\"Boosting game %s\" -n bellavita.toast/.MainActivity",
-                trim_newline(gamestart));
-            system(command);
-            free(pid);  // *** Perbaikan 6: Bebaskan memori pid setelah digunakan ***
-        }
-        performance_mode();
-    } else if (mode == 2 && cur_mode != 2) {
-        cur_mode = 2;
-        printf("Applying powersave mode\n");
-        powersave_mode();
-    } else if (mode == 0 && cur_mode != 0) {
-        cur_mode = 0;
-        printf("Applying normal mode\n");
-        normal_mode();
-    }
+  if (mode == 1 && cur_mode != 1) {
+    cur_mode = 1;
+    printf("Applying performance mode\n");
+    snprintf(command, sizeof(command), "pidof %s", gamestart);
+    pid = execute_command(command);
+    setPriorities(trim_newline(pid));
+    snprintf(command, sizeof(command),
+             "/system/bin/am start -a android.intent.action.MAIN -e toasttext "
+             "\"Boosting game %s\" -n bellavita.toast/.MainActivity",
+             trim_newline(gamestart));
+    system(command);
+    performance_mode();
+  } else if (mode == 2 && cur_mode != 2) {
+    cur_mode = 2;
+    printf("Applying powersave mode\n");
+    powersave_mode();
+  } else if (mode == 0 && cur_mode != 0) {
+    cur_mode = 0;
+    printf("Applying normal mode\n");
+    normal_mode();
+  }
+
+  if (pid) {
+    free(pid);
+    pid = NULL;
+  }
 }
 
 int main(void) {
-    char *screenstate = NULL;
-    char *low_power = NULL;
+  char *screenstate = NULL;
+  char *low_power = NULL;
 
-    perf_common();
+  perf_common();
 
-    while (1) {
-        snprintf(command, sizeof(command),
-            "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' | grep -Eo "
-            "\"$(cat /data/encore/gamelist.txt)\" | tail -n 1");
-        gamestart = execute_command(command);
+  while (1) {
+    snprintf(command, sizeof(command),
+             "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' | grep -Eo "
+             "\"$(cat /data/encore/gamelist.txt)\" | tail -n 1");
+    gamestart = execute_command(command);
 
-        snprintf(command, sizeof(command),
-            "dumpsys display | grep \"mScreenState\" | awk -F'=' '{print $2}'");
-        screenstate = execute_command(command);
+    snprintf(command, sizeof(command),
+             "dumpsys display | grep \"mScreenState\" | awk -F'=' '{print $2}'");
+    screenstate = execute_command(command);
 
-        low_power = execute_command("settings get global low_power_sticky");
+    low_power = execute_command("settings get global low_power_sticky");
 
-        if (screenstate == NULL) {  // *** Perbaikan 7: Tambahkan pengecekan null untuk screenstate ***
-            printf("error: screenstate is null\n");
-        } else if (gamestart && strcmp(trim_newline(screenstate), "ON") == 0) {
-            // Apply performance mode
-            apply_mode(1);
-        } else if (low_power && strcmp(trim_newline(low_power), "1") == 0) {
-            // Apply powersave mode
-            apply_mode(2);
-        } else {
-            // Apply normal mode
-            apply_mode(0);
-        }
-
-        if (gamestart) {
-            printf("gamestart: %s\n", trim_newline(gamestart));
-            free(gamestart);
-            gamestart = NULL;
-        } else {
-            printf("gamestart: NULL\n");
-        }
-        if (screenstate) {
-            printf("screenstate: %s\n", trim_newline(screenstate));
-            free(screenstate);
-            screenstate = NULL;
-        } else {
-            printf("screenstate: NULL\n");
-        }
-        if (low_power) {
-            printf("low_power: %s\n", trim_newline(low_power));
-            free(low_power);
-            low_power = NULL;
-        } else {
-            printf("low_power: NULL\n");
-        }
-
-        sleep(12);
+    if (gamestart && strcmp(trim_newline(screenstate), "ON") == 0) {
+      // Apply performance mode
+      apply_mode(1);
+    } else if (low_power && strcmp(trim_newline(low_power), "1") == 0) {
+      // Apply powersave mode
+      apply_mode(2);
+    } else {
+      // Apply normal mode
+      apply_mode(0);
     }
 
-    return 0;
+    if (gamestart) {
+      printf("gamestart: %s\n", trim_newline(gamestart));
+      free(gamestart);
+      gamestart = NULL;
+    } else {
+      printf("gamestart: NULL\n");
+    }
+    if (screenstate) {
+      printf("screenstate: %s\n", trim_newline(screenstate));
+      free(screenstate);
+      screenstate = NULL;
+    } else {
+      printf("screenstate: NULL\n");
+    }
+    if (low_power) {
+      printf("low_power: %s\n", trim_newline(low_power));
+      free(low_power);
+      low_power = NULL;
+    } else {
+      printf("low_power: NULL\n");
+    }
+
+    sleep(12);
+  }
+
+  return 0;
 }
